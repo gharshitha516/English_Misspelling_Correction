@@ -1,7 +1,5 @@
-torch==2.6.0+cu124
-transformers==4.52.4
-datasets==3.6.0
-accelerate==1.8.1
-nltk==3.9.1
-tqdm==4.67.1
-pandas==2.2.3
+streamlit
+transformers
+torch
+sentencepiece
+safetensors
