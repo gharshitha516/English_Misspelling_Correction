@@ -54,7 +54,7 @@ if st.button("✨ Correct My Text"):
 
         st.subheader("🔄 Word Suggestions (Optional)")
         for i, (orig, corr) in enumerate(zip(orig_words, corr_words)):
-            if orig != corr:
+            if orig != corr:  # only check changed words
                 # Mask the corrected word in the sentence
                 masked_sentence = corrected_text.split()
                 masked_sentence[i] = "[MASK]"
@@ -62,14 +62,14 @@ if st.button("✨ Correct My Text"):
 
                 # Get top predictions from BERT
                 suggestions = masker(masked_sentence)[:10]
-                # Filter valid suggestions and remove the corrected word itself
-                valid_options = [s['token_str'] for s in suggestions if filter_word(s['token_str']) and s['token_str'] != corr]
-                
-                # Only show dropdown if there are alternative suggestions
+                # Filter valid suggestions and exclude corrected word itself
+                valid_options = [s['token_str'] for s in suggestions if filter_word(s['token_str']) and s['token_str'].lower() != corr.lower()]
+
+                # Only create dropdown if there are real alternatives
                 if valid_options:
                     options = [corr] + valid_options
                     options = list(dict.fromkeys(options))  # remove duplicates
-                    choice = st.selectbox(f"Choose alternative for '{corr}' (was '{orig}'):", options=options, index=0)
+                    choice = st.selectbox(f"Replace '{orig}' → '{corr}':", options=options, index=0)
                     final_words.append(choice)
                 else:
                     final_words.append(corr)
