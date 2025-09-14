@@ -1,5 +1,7 @@
 import streamlit as st
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
+import string
+import re
 
 # Load correction model
 @st.cache_resource
@@ -21,6 +23,20 @@ masker = load_masker()
 st.markdown("<h1 style='text-align:center;'>✒️ SpellFixer Pro</h1>", unsafe_allow_html=True)
 
 user_input = st.text_area("Enter your sentence:", height=150, placeholder="Type with mistakes...")
+
+# Function to filter valid word suggestions
+def filter_word(token_str):
+    token_str = token_str.strip()
+    # Remove punctuation, numbers, or empty tokens
+    if not token_str:
+        return False
+    if token_str in string.punctuation:
+        return False
+    if re.match(r'^[0-9]+$', token_str):
+        return False
+    if re.match(r'^[^\w]+$', token_str):  # any non-word character
+        return False
+    return True
 
 if st.button("✨ Correct My Text"):
     if user_input.strip():
@@ -46,8 +62,11 @@ if st.button("✨ Correct My Text"):
                 masked_sentence = " ".join(masked_sentence)
 
                 # Get top predictions from BERT
-                suggestions = masker(masked_sentence)[:3]
-                options = [corr] + [s['token_str'] for s in suggestions]
+                suggestions = masker(masked_sentence)[:10]  # get top 10
+                # Filter suggestions to keep only valid words
+                options = [corr] + [s['token_str'] for s in suggestions if filter_word(s['token_str'])]
+                # Keep only unique suggestions
+                options = list(dict.fromkeys(options))
 
                 choice = st.selectbox(f"Replace '{corr}' (was '{orig}'):", options=options, index=0)
                 final_words.append(choice)
