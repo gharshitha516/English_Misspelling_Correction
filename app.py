@@ -69,14 +69,15 @@ if st.button("✨ Correct My Text"):
                 if valid_options:
                     options = [corr] + valid_options
                     options = list(dict.fromkeys(options))  # remove duplicates
-                    choice = st.selectbox(f"Replace '{orig}' → '{corr}':", options=options, index=0)
-                    final_words.append(choice)
+                    choice = st.selectbox(f"Replace '{orig}' → '{corr}':", options=options, index=0, key=f"choice_{i}")
+                    final_words.append(choice)  # ✅ use user’s choice here
                 else:
                     final_words.append(corr)
             else:
                 final_words.append(corr)
 
-        # Build final sentence
+        # Build final sentence using chosen words
         final_sentence = " ".join(final_words)
+
         st.subheader("🎯 Final Choice")
         st.success(final_sentence)
