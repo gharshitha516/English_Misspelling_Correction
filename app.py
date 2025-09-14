@@ -27,14 +27,13 @@ user_input = st.text_area("Enter your sentence:", height=150, placeholder="Type 
 # Function to filter valid word suggestions
 def filter_word(token_str):
     token_str = token_str.strip()
-    # Remove punctuation, numbers, or empty tokens
     if not token_str:
         return False
     if token_str in string.punctuation:
         return False
     if re.match(r'^[0-9]+$', token_str):
         return False
-    if re.match(r'^[^\w]+$', token_str):  # any non-word character
+    if re.match(r'^[^\w]+$', token_str):
         return False
     return True
 
@@ -53,7 +52,7 @@ if st.button("✨ Correct My Text"):
         corr_words = corrected_text.split()
         final_words = []
 
-        st.subheader("🔄 Word Suggestions")
+        st.subheader("🔄 Word Suggestions (Optional)")
         for i, (orig, corr) in enumerate(zip(orig_words, corr_words)):
             if orig != corr:
                 # Mask the corrected word in the sentence
@@ -62,14 +61,18 @@ if st.button("✨ Correct My Text"):
                 masked_sentence = " ".join(masked_sentence)
 
                 # Get top predictions from BERT
-                suggestions = masker(masked_sentence)[:10]  # get top 10
-                # Filter suggestions to keep only valid words
-                options = [corr] + [s['token_str'] for s in suggestions if filter_word(s['token_str'])]
-                # Keep only unique suggestions
-                options = list(dict.fromkeys(options))
-
-                choice = st.selectbox(f"Replace '{corr}' (was '{orig}'):", options=options, index=0)
-                final_words.append(choice)
+                suggestions = masker(masked_sentence)[:10]
+                # Filter valid suggestions and remove the corrected word itself
+                valid_options = [s['token_str'] for s in suggestions if filter_word(s['token_str']) and s['token_str'] != corr]
+                
+                # Only show dropdown if there are alternative suggestions
+                if valid_options:
+                    options = [corr] + valid_options
+                    options = list(dict.fromkeys(options))  # remove duplicates
+                    choice = st.selectbox(f"Choose alternative for '{corr}' (was '{orig}'):", options=options, index=0)
+                    final_words.append(choice)
+                else:
+                    final_words.append(corr)
             else:
                 final_words.append(corr)
 
