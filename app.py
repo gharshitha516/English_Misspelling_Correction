@@ -4,7 +4,7 @@ from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 # Load model + tokenizer from Hugging Face Hub
 @st.cache_resource
 def load_model():
-    model_name = "harshhitha/English_Misspelling_Correction"
+    model_name = "harshhitha/FTe2_Misspelling"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     return model, tokenizer
