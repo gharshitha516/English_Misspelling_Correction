@@ -1,7 +1,7 @@
 import streamlit as st
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
 
-# Load model + tokenizer from Hugging Face Hub
+# Load correction model
 @st.cache_resource
 def load_model():
     model_name = "harshhitha/FTe2_Misspelling"
@@ -11,88 +11,50 @@ def load_model():
 
 model, tokenizer = load_model()
 
-# --- Custom CSS for Styling ---
-st.markdown("""
-    <style>
-        body {
-            background-color: #f5f7fa;
-        }
-        .main-title {
-            text-align: center; 
-            color: #2c3e50; 
-            font-size: 42px; 
-            font-weight: bold;
-        }
-        .subtitle {
-            text-align: center; 
-            font-size: 18px; 
-            color: #7f8c8d; 
-            margin-bottom: 30px;
-        }
-        .stTextArea textarea {
-            border-radius: 12px !important;
-            border: 2px solid #dcdde1;
-            padding: 12px;
-            font-size: 16px;
-        }
-        .stButton>button {
-            background: linear-gradient(90deg, #6a11cb 0%, #2575fc 100%);
-            color: white;
-            border-radius: 25px;
-            padding: 0.6em 1.5em;
-            font-size: 18px;
-            font-weight: bold;
-            border: none;
-            transition: all 0.3s ease;
-        }
-        .stButton>button:hover {
-            transform: scale(1.05);
-            background: linear-gradient(90deg, #2575fc 0%, #6a11cb 100%);
-        }
-        .card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            margin-top: 20px;
-        }
-    </style>
-""", unsafe_allow_html=True)
+# Load BERT fill-mask pipeline for word suggestions
+@st.cache_resource
+def load_masker():
+    return pipeline("fill-mask", model="bert-base-uncased")
 
-# --- Header ---
-st.markdown("<h1 class='main-title'>✒️ SpellFixer</h1>", unsafe_allow_html=True)
-st.markdown("<p class='subtitle'>Fix spelling mistakes instantly with AI ✨</p>", unsafe_allow_html=True)
+masker = load_masker()
 
-# --- Input Section ---
-st.markdown("#### 📝 Enter your text")
-user_input = st.text_area("", height=150, placeholder="Type something with spelling mistakes...")
+st.markdown("<h1 style='text-align:center;'>✒️ SpellFixer Pro</h1>", unsafe_allow_html=True)
 
-# Example buttons
-examples = [
-    "I relly likee this aap",
-    "Ths is an exmple with erors",
-    "She go to scholl evry day"
-]
-cols = st.columns(len(examples))
-for i, ex in enumerate(examples):
-    if cols[i].button(ex):
-        user_input = ex
+user_input = st.text_area("Enter your sentence:", height=150, placeholder="Type with mistakes...")
 
-# --- Generate Button ---
 if st.button("✨ Correct My Text"):
     if user_input.strip():
-        with st.spinner("🔍 Checking your text…"):
+        with st.spinner("Correcting your text…"):
             inputs = tokenizer([user_input], return_tensors="pt", padding=True, truncation=True)
             outputs = model.generate(**inputs, max_length=128, num_beams=4)
             corrected_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-        # --- Output Card ---
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### ✅ Corrected Text")
+        st.subheader("✅ Corrected Sentence")
         st.success(corrected_text)
-        st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        st.warning("⚠️ Please enter some text to correct")
 
-# --- Footer ---
-st.markdown("<hr><p style='text-align:center; color:#95a5a6;'></p>", unsafe_allow_html=True)
+        # Compare word by word
+        orig_words = user_input.split()
+        corr_words = corrected_text.split()
+        final_words = []
+
+        st.subheader("🔄 Word Suggestions")
+        for i, (orig, corr) in enumerate(zip(orig_words, corr_words)):
+            if orig != corr:
+                # Mask the corrected word in the sentence
+                masked_sentence = corrected_text.split()
+                masked_sentence[i] = "[MASK]"
+                masked_sentence = " ".join(masked_sentence)
+
+                # Get top predictions from BERT
+                suggestions = masker(masked_sentence)[:3]
+                options = [corr] + [s['token_str'] for s in suggestions]
+
+                choice = st.selectbox(f"Replace '{corr}' (was '{orig}'):", options=options, index=0)
+                final_words.append(choice)
+            else:
+                final_words.append(corr)
+
+        # Build final sentence
+        final_sentence = " ".join(final_words)
+        st.subheader("🎯 Final Choice")
+        st.success(final_sentence)
