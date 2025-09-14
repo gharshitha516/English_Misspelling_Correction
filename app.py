@@ -55,12 +55,12 @@ masker = load_masker()
 mask_token = getattr(masker.tokenizer, "mask_token", "[MASK]")
 
 # App
-st.markdown("<h1 style='text-align:center;'>✒️ SpellFixer Pro</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align:center;'>✒️ LexCorrect </h1>", unsafe_allow_html=True)
 
 if "corrected_text" not in st.session_state:
     st.session_state.corrected_text = None
 
-user_input = st.text_area("Enter your sentence:", height=150, placeholder="Type with mistakes...")
+user_input = st.text_area("", height=150, placeholder="Type something here.")
 
 if st.button("✨ Correct My Text"):
     if not user_input.strip():
