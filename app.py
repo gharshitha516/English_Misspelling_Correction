@@ -1,9 +1,12 @@
 import streamlit as st
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
-from difflib import SequenceMatcher
+import spacy
 import re
 import string
 
+# -------------------------------
+# Helpers
+# -------------------------------
 def tokenize_with_punct(text: str):
     return re.findall(r"\w+|[^\w\s]", text, re.UNICODE)
 
@@ -23,19 +26,22 @@ def detokenize(tokens):
             out += " " + tok
     return out.strip()
 
-def filter_suggestion(s: str) -> bool:
-    s = s.strip()
-    if not s:
+def filter_suggestion(word: str) -> bool:
+    """Remove punctuation, numbers, multi-word junk."""
+    word = word.strip()
+    if not word:
         return False
-    if all(ch in string.punctuation for ch in s):
+    if all(ch in string.punctuation for ch in word):
         return False
-    if any(ch.isdigit() for ch in s):
+    if any(ch.isdigit() for ch in word):
         return False
-    if " " in s:
+    if " " in word:
         return False
-    return re.fullmatch(r"[A-Za-z][A-Za-z0-9'’-]*", s) is not None
+    return True
 
+# -------------------------------
 # Load correction model
+# -------------------------------
 @st.cache_resource
 def load_model():
     model_name = "harshhitha/FTe2_Misspelling"
@@ -45,7 +51,9 @@ def load_model():
 
 model, tokenizer = load_model()
 
+# -------------------------------
 # Load masker
+# -------------------------------
 @st.cache_resource
 def load_masker():
     return pipeline("fill-mask", model="bert-base-uncased")
@@ -53,74 +61,90 @@ def load_masker():
 masker = load_masker()
 mask_token = getattr(masker.tokenizer, "mask_token", "[MASK]")
 
-# App
-st.markdown("<h1 style='text-align:center;'>✒️ TextRefine </h1>", unsafe_allow_html=True)
+# -------------------------------
+# Load spaCy (for POS tagging)
+# -------------------------------
+@st.cache_resource
+def load_spacy():
+    return spacy.load("en_core_web_sm")
 
-# Session state
+nlp = load_spacy()
+
+# -------------------------------
+# App
+# -------------------------------
+st.markdown("<h1 style='text-align:center;'>✒️ SpellFixer Pro</h1>", unsafe_allow_html=True)
+
 if "corrected_text" not in st.session_state:
     st.session_state.corrected_text = None
 
-user_input = st.text_area("", height=150, placeholder="Type with mistakes...")
+user_input = st.text_area("Enter your sentence:", height=150, placeholder="Type with mistakes...")
 
 if st.button("✨ Correct My Text"):
     if not user_input.strip():
-        st.warning("Type something here")
+        st.warning("Please enter some text.")
     else:
         with st.spinner("Correcting your text…"):
             inputs = tokenizer([user_input], return_tensors="pt", padding=True, truncation=True)
             outputs = model.generate(**inputs, max_length=256, num_beams=4)
             st.session_state.corrected_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
-# If we already have corrected text, show suggestions
+
+# -------------------------------
+# If we already have corrected text
+# -------------------------------
 if st.session_state.corrected_text:
     corrected_text = st.session_state.corrected_text
 
     st.subheader("✅ Corrected Sentence")
     st.success(corrected_text)
 
-    orig_toks = tokenize_with_punct(user_input)
     corr_toks = tokenize_with_punct(corrected_text)
     final_toks = corr_toks.copy()
 
+    # POS tagging on corrected sentence
+    doc = nlp(corrected_text)
+    pos_tags = [token.pos_ for token in doc]
+
     st.subheader("🔄 Word Suggestions (Optional)")
 
-    sm = SequenceMatcher(None, orig_toks, corr_toks)
-    choice_index = 0
+    for i, (word, pos) in enumerate(zip(corr_toks, pos_tags)):
+        if is_punct(word):
+            continue
 
-    for tag, i1, i2, j1, j2 in sm.get_opcodes():
-        if tag == "replace":
-            if (i2 - i1) == 1 and (j2 - j1) == 1:
-                orig_word = orig_toks[i1]
-                corr_word = corr_toks[j1]
-                if is_punct(corr_word):
-                    continue
+        # Build masked sentence
+        masked = corr_toks.copy()
+        masked[i] = mask_token
+        masked_sentence = detokenize(masked)
 
-                masked = corr_toks.copy()
-                masked[j1] = mask_token
-                masked_sentence = detokenize(masked)
+        candidates = masker(masked_sentence)[:15]
 
-                candidates = masker(masked_sentence)[:12]
-                valid = []
-                for c in candidates:
-                    tok_str = c.get("token_str", "").strip(" '\"")
-                    if tok_str and filter_suggestion(tok_str) and tok_str.lower() != corr_word.lower():
-                        valid.append(tok_str)
-                seen = set()
-                valid = [x for x in valid if not (x in seen or seen.add(x))]
+        valid = []
+        for cand in candidates:
+            token_str = cand.get("token_str", "").strip(" '\"")
+            score = cand.get("score", 0)
+            if score < 0.05:
+                continue
+            if filter_suggestion(token_str):
+                # POS tag check
+                doc_cand = nlp(token_str)
+                if doc_cand and doc_cand[0].pos_ == pos:
+                    valid.append(token_str)
 
-                if valid:
-                    options = [corr_word] + valid
-                    key = f"choice_{choice_index}"
-                    default = st.session_state.get(key, corr_word)
-                    choice = st.selectbox(
-                        f"Replace '{orig_word}' → '{corr_word}':",
-                        options=options,
-                        index=options.index(default) if default in options else 0,
-                        key=key
-                    )
-                    final_toks[j1] = choice
-                    choice_index += 1
+        # dedupe
+        seen = set()
+        valid = [x for x in valid if not (x in seen or seen.add(x))]
+
+        if valid:
+            options = [word] + valid
+            choice = st.selectbox(
+                f"Replace '{word}':",
+                options=options,
+                index=0,
+                key=f"choice_{i}"
+            )
+            final_toks[i] = choice
 
     final_sentence = detokenize(final_toks)
-    st.subheader("✨ Final Version")
+    st.subheader("🎯 Final Choice")
     st.success(final_sentence)
+
