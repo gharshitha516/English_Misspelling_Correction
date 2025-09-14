@@ -3,9 +3,7 @@ from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
 import re
 import string
 
-# -------------------------------
 # Helpers
-# -------------------------------
 def tokenize_with_punct(text: str):
     return re.findall(r"\w+|[^\w\s]", text, re.UNICODE)
 
@@ -38,9 +36,7 @@ def filter_suggestion(word: str) -> bool:
         return False
     return True
 
-# -------------------------------
 # Load correction model
-# -------------------------------
 @st.cache_resource
 def load_model():
     model_name = "harshhitha/FTe2_Misspelling"
@@ -50,9 +46,7 @@ def load_model():
 
 model, tokenizer = load_model()
 
-# -------------------------------
 # Load masker
-# -------------------------------
 @st.cache_resource
 def load_masker():
     return pipeline("fill-mask", model="bert-base-uncased")
@@ -60,9 +54,7 @@ def load_masker():
 masker = load_masker()
 mask_token = getattr(masker.tokenizer, "mask_token", "[MASK]")
 
-# -------------------------------
 # App
-# -------------------------------
 st.markdown("<h1 style='text-align:center;'>✒️ SpellFixer Pro</h1>", unsafe_allow_html=True)
 
 if "corrected_text" not in st.session_state:
@@ -79,9 +71,7 @@ if st.button("✨ Correct My Text"):
             outputs = model.generate(**inputs, max_length=256, num_beams=4)
             st.session_state.corrected_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-# -------------------------------
 # If we already have corrected text
-# -------------------------------
 if st.session_state.corrected_text:
     corrected_text = st.session_state.corrected_text
 
