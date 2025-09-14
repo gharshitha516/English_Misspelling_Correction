@@ -3,7 +3,6 @@ from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
 import string
 import re
 
-
 # 1. Load the grammar correction model
 @st.cache_resource
 def load_model():
@@ -52,16 +51,18 @@ if st.button("✨ Correct My Text"):
         st.subheader("✅ Corrected Sentence")
         st.success(corrected_text)
 
-        # 2: Compare words and suggest alternatives only if useful 
+        # 2: Prepare dropdowns only where useful 
         orig_words = user_input.split()
         corr_words = corrected_text.split()
-        final_words = []
+
+        # Start with corrected words as default final choice
+        final_words = corr_words.copy()
 
         st.subheader("🔄 Word Suggestions (Optional)")
         for i, (orig, corr) in enumerate(zip(orig_words, corr_words)):
-            if orig != corr:  # only for changed words
+            if orig != corr:  # only check changed words
                 # Mask the corrected word in the sentence
-                masked_sentence = corrected_text.split()
+                masked_sentence = corr_words.copy()
                 masked_sentence[i] = "[MASK]"
                 masked_sentence = " ".join(masked_sentence)
 
@@ -72,7 +73,7 @@ if st.button("✨ Correct My Text"):
                     if filter_word(s['token_str']) and s['token_str'].lower() != corr.lower()
                 ]
 
-                # If there are alternatives, show dropdown
+                # Only create dropdown if there are real alternatives
                 if valid_options:
                     options = [corr] + valid_options
                     options = list(dict.fromkeys(options))  # remove duplicates
@@ -82,11 +83,7 @@ if st.button("✨ Correct My Text"):
                         index=0,
                         key=f"choice_{i}"
                     )
-                    final_words.append(choice)
-                else:
-                    final_words.append(corr)
-            else:
-                final_words.append(corr)
+                    final_words[i] = choice  # ✅ update only if user chooses
 
         # 3: Build final sentence 
         final_sentence = " ".join(final_words)
