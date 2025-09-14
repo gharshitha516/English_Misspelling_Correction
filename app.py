@@ -1,6 +1,5 @@
 import streamlit as st
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
-import spacy
 import re
 import string
 
@@ -62,15 +61,6 @@ masker = load_masker()
 mask_token = getattr(masker.tokenizer, "mask_token", "[MASK]")
 
 # -------------------------------
-# Load spaCy (for POS tagging)
-# -------------------------------
-@st.cache_resource
-def load_spacy():
-    return spacy.load("en_core_web_sm")
-
-nlp = load_spacy()
-
-# -------------------------------
 # App
 # -------------------------------
 st.markdown("<h1 style='text-align:center;'>✒️ SpellFixer Pro</h1>", unsafe_allow_html=True)
@@ -101,13 +91,9 @@ if st.session_state.corrected_text:
     corr_toks = tokenize_with_punct(corrected_text)
     final_toks = corr_toks.copy()
 
-    # POS tagging on corrected sentence
-    doc = nlp(corrected_text)
-    pos_tags = [token.pos_ for token in doc]
-
     st.subheader("🔄 Word Suggestions (Optional)")
 
-    for i, (word, pos) in enumerate(zip(corr_toks, pos_tags)):
+    for i, word in enumerate(corr_toks):
         if is_punct(word):
             continue
 
@@ -116,7 +102,7 @@ if st.session_state.corrected_text:
         masked[i] = mask_token
         masked_sentence = detokenize(masked)
 
-        candidates = masker(masked_sentence)[:15]
+        candidates = masker(masked_sentence)[:10]
 
         valid = []
         for cand in candidates:
@@ -125,17 +111,14 @@ if st.session_state.corrected_text:
             if score < 0.05:
                 continue
             if filter_suggestion(token_str):
-                # POS tag check
-                doc_cand = nlp(token_str)
-                if doc_cand and doc_cand[0].pos_ == pos:
-                    valid.append(token_str)
+                valid.append(token_str)
 
         # dedupe
         seen = set()
         valid = [x for x in valid if not (x in seen or seen.add(x))]
 
         if valid:
-            options = [word] + valid
+            options = [word] + valid[:3]  # limit to top 3 sensible suggestions
             choice = st.selectbox(
                 f"Replace '{word}':",
                 options=options,
