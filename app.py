@@ -4,9 +4,6 @@ from difflib import SequenceMatcher
 import re
 import string
 
-# -------------------------------
-# Helpers
-# -------------------------------
 def tokenize_with_punct(text: str):
     return re.findall(r"\w+|[^\w\s]", text, re.UNICODE)
 
@@ -38,9 +35,7 @@ def filter_suggestion(s: str) -> bool:
         return False
     return re.fullmatch(r"[A-Za-z][A-Za-z0-9'’-]*", s) is not None
 
-# -------------------------------
 # Load correction model
-# -------------------------------
 @st.cache_resource
 def load_model():
     model_name = "harshhitha/FTe2_Misspelling"
@@ -50,9 +45,7 @@ def load_model():
 
 model, tokenizer = load_model()
 
-# -------------------------------
 # Load masker
-# -------------------------------
 @st.cache_resource
 def load_masker():
     return pipeline("fill-mask", model="bert-base-uncased")
@@ -60,29 +53,25 @@ def load_masker():
 masker = load_masker()
 mask_token = getattr(masker.tokenizer, "mask_token", "[MASK]")
 
-# -------------------------------
 # App
-# -------------------------------
-st.markdown("<h1 style='text-align:center;'>✒️ SpellFixer Pro</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align:center;'>✒️ TextRefine </h1>", unsafe_allow_html=True)
 
 # Session state
 if "corrected_text" not in st.session_state:
     st.session_state.corrected_text = None
 
-user_input = st.text_area("Enter your sentence:", height=150, placeholder="Type with mistakes...")
+user_input = st.text_area("", height=150, placeholder="Type with mistakes...")
 
 if st.button("✨ Correct My Text"):
     if not user_input.strip():
-        st.warning("Please enter some text.")
+        st.warning("Type something here")
     else:
         with st.spinner("Correcting your text…"):
             inputs = tokenizer([user_input], return_tensors="pt", padding=True, truncation=True)
             outputs = model.generate(**inputs, max_length=256, num_beams=4)
             st.session_state.corrected_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-# -------------------------------
+            
 # If we already have corrected text, show suggestions
-# -------------------------------
 if st.session_state.corrected_text:
     corrected_text = st.session_state.corrected_text
 
@@ -133,5 +122,5 @@ if st.session_state.corrected_text:
                     choice_index += 1
 
     final_sentence = detokenize(final_toks)
-    st.subheader("🎯 Final Choice")
+    st.subheader("✨ Final Version")
     st.success(final_sentence)
